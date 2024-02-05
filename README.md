@@ -74,7 +74,7 @@ Este script de Python utiliza Selenium para realizar tareas de web scraping en e
 3. Abre la terminal o el símbolo del sistema y ejecuta el script usando el siguiente comando:
 
     ```
-    python selenium_project.py
+    python src/selenium_project.py
     ```
 
 4. El script se ejecutará, extrayendo párrafos de las secciones "Home" y "Who We Are" del sitio web de BCNC Group en varios idiomas.
@@ -94,7 +94,7 @@ Este proyecto contiene un script de Python que realiza un test automatizado para
 Para ejecutar el test, simplemente ejecuta el siguiente comando en tu terminal:
 
     ```
-    pytest pytest_project_test.py
+    pytest src/pytest_project_test.py
     ```
 
 ## Descripción
