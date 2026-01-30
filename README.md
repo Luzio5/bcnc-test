@@ -125,3 +125,176 @@ Las pruebas se realizan utilizando el enfoque BDD "given-when-then", que describ
 ## Resultados Esperados
 
 El test debería pasar sin errores si los datos recibidos del API coinciden con los datos esperados. En caso de que haya discrepancias, el test fallará y mostrará un mensaje de error.
+
+
+
+
+
+
+
+
+
+
+## Architecture diagrams (pick what you want)
+
+### C4 Context
+```mermaid
+C4Context
+title ImgForge C4 Context
+
+Person(dev, "Developer", "Uses API to manage images")
+System(imgforge, "ImgForge API", "Image lifecycle management service")
+
+System_Ext(okta, "Okta", "OIDC authentication")
+System_Ext(ecr, "AWS ECR", "Container registry")
+
+Rel(dev, imgforge, "HTTP/JSON")
+Rel(imgforge, okta, "Validate tokens")
+Rel(imgforge, ecr, "Check repos/tags")
+```
+
+### C4 Container
+```mermaid
+C4Container
+title ImgForge C4 Containers
+
+System_Boundary(s1, "ImgForge") {
+  Container(api, "API Server", "NestJS", "Routes and orchestration")
+  Container(audit, "Audit Log", "In-memory store", "Event records")
+}
+
+System_Ext(okta, "Okta", "OIDC")
+System_Ext(ecr, "ECR", "Registry")
+
+Rel(api, okta, "OIDC token validation")
+Rel(api, ecr, "Repository/tag checks")
+Rel(api, audit, "Emit audit events")
+```
+
+### C4 Component
+```mermaid
+C4Component
+title ImgForge C4 Components
+
+Container_Boundary(api, "API Server") {
+  Component(Auth, "Auth Module", "Okta adapter")
+  Component(Image, "Image Module", "Image CRUD + patching")
+  Component(Deps, "Dependency Module", "Image dependencies")
+  Component(Params, "Parameter Module", "Build parameters")
+  Component(Build, "Build Module", "Plan/apply builds")
+  Component(Registry, "Registry Module", "ECR adapter")
+  Component(Hub, "Hub Module", "Event emitter")
+  Component(Audit, "Audit Module", "Audit log")
+}
+
+Rel(Auth, Hub, "Emits auth events")
+Rel(Image, Registry, "Repo checks")
+Rel(Deps, Image, "Reads images")
+Rel(Params, Image, "Reads images")
+Rel(Build, Image, "Reads image state")
+Rel(Build, Registry, "Tag checks")
+Rel(Hub, Audit, "Records events")
+```
+
+### Module Dependency Graph (simple)
+```mermaid
+graph TD
+  Auth-->Hub
+  Image-->Registry
+  Image-->Hub
+  Dependency-->Image
+  Dependency-->Hub
+  Parameter-->Image
+  Parameter-->Hub
+  Build-->Image
+  Build-->Registry
+  Build-->Hub
+  Hub-->Audit
+```
+
+### Sequence: Patching Cycle
+```mermaid
+sequenceDiagram
+actor Dev
+participant API
+participant Registry
+participant Audit
+
+Dev->>API: PATCH /images/:id (reason)
+API->>Registry: Verify repository exists
+Registry-->>API: ok
+API->>Audit: record image.patched
+API-->>Dev: patched image state
+```
+
+### Sequence: Build Plan + Apply
+```mermaid
+sequenceDiagram
+actor Dev
+participant API
+participant Registry
+participant Audit
+
+Dev->>API: POST /builds/plan (imageId, tag)
+API->>Audit: record build.planned
+API-->>Dev: plan
+Dev->>API: POST /builds/apply/:id
+API->>Registry: check tag exists
+Registry-->>API: not found
+API->>Audit: record build.started
+API->>Audit: record build.completed
+API-->>Dev: build status
+```
+
+### Activity Flow: Image Lifecycle
+```mermaid
+flowchart LR
+  A[Create Image] --> B[Set Parameters]
+  B --> C[Add Dependencies]
+  C --> D[Plan Build]
+  D --> E[Apply Build]
+  E --> F[Patch Image]
+```
+
+### State Diagram: Image Status
+```mermaid
+stateDiagram-v2
+  [*] --> draft
+  draft --> ready
+  ready --> patched
+  ready --> deleted
+  patched --> ready
+  patched --> deleted
+```
+
+### ER Diagram: Core Data Model
+```mermaid
+erDiagram
+  IMAGE ||--o{ PARAMETER : has
+  IMAGE ||--o{ DEPENDENCY : "from"
+  IMAGE ||--o{ BUILD_PLAN : "planned for"
+  IMAGE {
+    string id
+    string name
+    string repository
+    string status
+  }
+  PARAMETER {
+    string id
+    string imageId
+    string key
+    string value
+  }
+  DEPENDENCY {
+    string id
+    string fromImageId
+    string toImageId
+    string tag
+  }
+  BUILD_PLAN {
+    string id
+    string imageId
+    string tag
+    string status
+  }
+```
